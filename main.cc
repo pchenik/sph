@@ -63,6 +63,7 @@ struct Particle {
 };
 
 std::vector<Particle> particles;
+std::vector<float> particles_positions(2 * particles.size());
 
 void generate_particles() {
     std::random_device dev;
@@ -152,6 +153,7 @@ void compute_positions() {
     }
 }
 
+enum class Version { CPU, GPU } version;
 void on_display() {
     if (no_screen) { glBindFramebuffer(GL_FRAMEBUFFER,fbo); }
     glClear(GL_COLOR_BUFFER_BIT);
@@ -159,8 +161,12 @@ void on_display() {
     gluOrtho2D(0, window_width, 0, window_height);
     glColor4f(0.2f, 0.6f, 1.0f, 1);
     glBegin(GL_POINTS);
-    for (const auto& particle : particles) {
-        glVertex2f(particle.position(0), particle.position(1));
+    for (int i = 0; i < particles.size(); ++i) {
+        switch(version) {
+            case Version::CPU: glVertex2f(particles[i].position(0), particles[i].position(1)); break;
+            case Version::GPU: glVertex2f(particles_positions[2 * i], particles_positions[2 * i + 1]); break;
+            default: break;
+        }
     }
     glEnd();
     glutSwapBuffers();
@@ -187,25 +193,38 @@ void on_idle_cpu() {
 	glutPostRedisplay();
 }
 
-
-std::vector<float> particles_positions(2 * particles.size());
-
 struct Buffers {
     Buffers () = default;
 
     void init () {
-        density = {opencl.context, CL_MEM_READ_WRITE, particles.size() * sizeof(float)};
+
+        std::cout << "BEFORE_EVERYTHING" << "\n";
+
+        density = cl::Buffer(opencl.context, CL_MEM_READ_WRITE, particles.size() * sizeof(float));
+
+        std::cout << "KEK" << "\n";
+
         pressure = {opencl.context, CL_MEM_READ_WRITE, particles.size() * sizeof(float)};
         forces = {opencl.context, CL_MEM_READ_WRITE, 2 * particles.size() * sizeof(float)};
         velocities = {opencl.context, CL_MEM_READ_WRITE, 2 * particles.size() * sizeof(float)};
 
+
+        std::cout << "BEFORE" << "\n";
+
         std::iota(particles_positions.begin(), particles_positions.end(), 0);
 
+        for(const auto& x: particles_positions)
+            std::cout << x << " ";
+        std::cout << "\n" << "\n";
+
         std::for_each(particles_positions.begin(), particles_positions.end(), [](float &coord){
-            coord = particles[(int)coord / 2].position((int)coord & 1);
+            coord = particles[int(coord) / 2].position(int(coord) & 1);
         });
 
         positions =  {opencl.queue, begin(particles_positions), end(particles_positions), true};
+
+        std::cout << "AFTER" << "\n";
+
     }
 
     cl::Buffer density;
@@ -261,7 +280,9 @@ void on_idle_gpu() {
     //std::clog << "GPU version is not implemented!" << std::endl; std::exit(1);
     if (particles.empty()) {
         generate_particles();
+        std::cout << "HERE1" << "\n";
         cl_buffers.init();
+        std::cout << "HERE2" << "\n";
     }
     using std::chrono::duration_cast;
     using std::chrono::seconds;
@@ -272,9 +293,7 @@ void on_idle_gpu() {
     compute_positions_gpu();
     auto t1 = clock_type::now();
     //copy the positions back on cpu
-
-
-
+    cl::copy(opencl.queue, cl_buffers.positions, begin(particles_positions), end(particles_positions));
     auto dt = duration_cast<float_duration>(t1-t0).count();
     std::clog
         << std::setw(20) << dt
@@ -355,8 +374,8 @@ void openCL_init() {
 }
 
 int main(int argc, char* argv[]) {
-    enum class Version { CPU, GPU };
-    Version version = Version::CPU;
+    //enum class Version { CPU, GPU };
+    //Version version = Version::CPU;
     if (argc == 2) {
         std::string str(argv[1]);
         for (auto& ch : str) { ch = std::tolower(ch); }
