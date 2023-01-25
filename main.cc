@@ -2,10 +2,12 @@
 #define CL_HPP_ENABLE_EXCEPTIONS
 #define CL_HPP_TARGET_OPENCL_VERSION 120
 #define CL_HPP_MINIMUM_OPENCL_VERSION 120
-#define FPS_CPU 60
-#define FPS_GPU 60
 
+#if defined(__APPLE__) || defined(__MACOSX)
+#include <OpenCL/cl.hpp>
+#else
 #include <CL/cl2.hpp>
+#endif
 
 #include <chrono>
 #include <cmath>
@@ -18,7 +20,6 @@
 #include <vector>
 #include <string>
 #include <sstream>
-
 
 #include <GL/glew.h>
 #include <GL/glut.h>
@@ -63,7 +64,7 @@ struct Particle {
 };
 
 std::vector<Particle> particles;
-std::vector<float> particles_positions(2 * particles.size());
+std::vector<float> particles_positions;
 
 void generate_particles() {
     std::random_device dev;
@@ -153,7 +154,9 @@ void compute_positions() {
     }
 }
 
-enum class Version { CPU, GPU } version;
+enum class Version { CPU, GPU };
+Version version = Version::GPU;
+
 void on_display() {
     if (no_screen) { glBindFramebuffer(GL_FRAMEBUFFER,fbo); }
     glClear(GL_COLOR_BUFFER_BIT);
@@ -198,11 +201,17 @@ struct Buffers {
 
     void init () {
 
-        std::cout << "BEFORE_EVERYTHING" << "\n";
+        /*std::cout << "BEFORE_EVERYTHING " << particles.size() << "\n";
+
+        int buf_size = particles.size()*sizeof(cl_float);
+
+        cl::Buffer temp(opencl.context, CL_MEM_READ_WRITE, buf_size);
+
+        std::cout << "KEK1" << "\n";*/
 
         density = cl::Buffer(opencl.context, CL_MEM_READ_WRITE, particles.size() * sizeof(float));
 
-        std::cout << "KEK" << "\n";
+        std::cout << "KEK2" << "\n";
 
         pressure = {opencl.context, CL_MEM_READ_WRITE, particles.size() * sizeof(float)};
         forces = {opencl.context, CL_MEM_READ_WRITE, 2 * particles.size() * sizeof(float)};
@@ -211,6 +220,7 @@ struct Buffers {
 
         std::cout << "BEFORE" << "\n";
 
+        particles_positions.resize(2 * particles.size());
         std::iota(particles_positions.begin(), particles_positions.end(), 0);
 
         for(const auto& x: particles_positions)
@@ -359,7 +369,7 @@ void openCL_init() {
         }
 
         cl::CommandQueue queue(context, device);
-        OpenCL opencl{platform, device, context, program, queue};
+        opencl = {platform, device, context, program, queue};
 
     } catch (const cl::Error& err) {
         std::cerr << "OpenCL error in " << err.what() << '(' << err.err() << ")\n";
@@ -376,11 +386,11 @@ void openCL_init() {
 int main(int argc, char* argv[]) {
     //enum class Version { CPU, GPU };
     //Version version = Version::CPU;
-    if (argc == 2) {
+    /*if (argc == 2) {
         std::string str(argv[1]);
         for (auto& ch : str) { ch = std::tolower(ch); }
         if (str == "gpu") { version = Version::GPU; }
-    }
+    }*/
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE);
 	glutInitWindowSize(window_width, window_height);
 	glutInit(&argc, argv);
