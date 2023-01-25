@@ -200,25 +200,10 @@ struct Buffers {
     Buffers () = default;
 
     void init () {
-
-        /*std::cout << "BEFORE_EVERYTHING " << particles.size() << "\n";
-
-        int buf_size = particles.size()*sizeof(cl_float);
-
-        cl::Buffer temp(opencl.context, CL_MEM_READ_WRITE, buf_size);
-
-        std::cout << "KEK1" << "\n";*/
-
         density = cl::Buffer(opencl.context, CL_MEM_READ_WRITE, particles.size() * sizeof(float));
-
-        std::cout << "KEK2" << "\n";
-
         pressure = {opencl.context, CL_MEM_READ_WRITE, particles.size() * sizeof(float)};
         forces = {opencl.context, CL_MEM_READ_WRITE, 2 * particles.size() * sizeof(float)};
         velocities = {opencl.context, CL_MEM_READ_WRITE, 2 * particles.size() * sizeof(float)};
-
-
-        std::cout << "BEFORE" << "\n";
 
         particles_positions.resize(2 * particles.size());
         std::iota(particles_positions.begin(), particles_positions.end(), 0);
@@ -231,9 +216,12 @@ struct Buffers {
             coord = particles[int(coord) / 2].position(int(coord) & 1);
         });
 
-        positions =  {opencl.queue, begin(particles_positions), end(particles_positions), true};
+        for(const auto& x: particles_positions)
+            std::cout << x << " ";
+        std::cout << "\n" << "\n";
 
-        std::cout << "AFTER" << "\n";
+
+        positions =  {opencl.queue, begin(particles_positions), end(particles_positions), true};
 
     }
 
@@ -250,8 +238,11 @@ void compute_density_and_pressure_gpu() {
     kernel.setArg(0, cl_buffers.density);
     kernel.setArg(1, cl_buffers.pressure);
     kernel.setArg(2, cl_buffers.positions);
+    opencl.queue.flush();
+
+    //std::cout << "KERNEL1 " << particles.size() << "\n";
     //4 warp per 1 multiprocessor
-    opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(particles.size()), cl::NDRange(128),
+    opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(particles.size()), cl::NullRange,
                                       NULL, &ev_kernel);
     ev_kernel.wait();
     opencl.queue.flush();
@@ -265,8 +256,10 @@ void compute_forces_gpu() {
     kernel.setArg(2, cl_buffers.forces);
     kernel.setArg(3, cl_buffers.velocities);
     kernel.setArg(4, cl_buffers.positions);
+    opencl.queue.flush();
+
     //4 warp per 1 multiprocessor
-    opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(particles.size()), cl::NDRange(128),
+    opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(particles.size()), cl::NullRange,
                                       NULL, &ev_kernel);
     ev_kernel.wait();
     opencl.queue.flush();
@@ -279,8 +272,10 @@ void compute_positions_gpu() {
     kernel.setArg(1, cl_buffers.forces);
     kernel.setArg(2, cl_buffers.velocities);
     kernel.setArg(3, cl_buffers.positions);
+    opencl.queue.flush();
+
     //4 warp per 1 multiprocessor
-    opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(particles.size()), cl::NDRange(128),
+    opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(particles.size()), cl::NullRange,
                                       NULL, &ev_kernel);
     ev_kernel.wait();
     opencl.queue.flush();
@@ -304,6 +299,11 @@ void on_idle_gpu() {
     auto t1 = clock_type::now();
     //copy the positions back on cpu
     cl::copy(opencl.queue, cl_buffers.positions, begin(particles_positions), end(particles_positions));
+    //opencl.queue.enqueueReadBuffer(cl_buffers.positions, true, 0, 2 * particles.size()*sizeof(cl_float), particles_positions.data());
+
+    for(const auto& x: particles_positions)
+        std::cout << x << " ";
+    std::cout << "\n" << "\n";
     auto dt = duration_cast<float_duration>(t1-t0).count();
     std::clog
         << std::setw(20) << dt
