@@ -283,8 +283,8 @@ void compute_positions_gpu() {
     kernel.setArg(1, cl_buffers.forces);
     kernel.setArg(2, cl_buffers.velocities);
     kernel.setArg(3, cl_buffers.positions);
-    kernel.setArg(4, 800);
-    kernel.setArg(5, 600);
+    //kernel.setArg(4, 800);
+    //kernel.setArg(5, 600);
     opencl.queue.flush();
 
     std::cout << "KERNEL3" << particles.size() << "\n";
