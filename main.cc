@@ -208,21 +208,11 @@ struct Buffers {
         particles_positions.resize(2 * particles.size());
         std::iota(particles_positions.begin(), particles_positions.end(), 0);
 
-        for(const auto& x: particles_positions)
-            std::cout << x << " ";
-        std::cout << "\n" << "\n";
-
         std::for_each(particles_positions.begin(), particles_positions.end(), [](float &coord){
             coord = particles[int(coord) / 2].position(int(coord) & 1);
         });
 
-        for(const auto& x: particles_positions)
-            std::cout << x << " ";
-        std::cout << "\n" << "\n";
-
-
         positions =  {opencl.queue, begin(particles_positions), end(particles_positions), true};
-
     }
 
     cl::Buffer density;
@@ -235,15 +225,11 @@ struct Buffers {
 void compute_density_and_pressure_gpu() {
     cl::Event ev_kernel;
     cl::Kernel kernel(opencl.program, "compute_density_and_pressure");
-    //cl::Kernel kernel(opencl.program, "density_pressure");
-
-
     kernel.setArg(0, cl_buffers.density);
     kernel.setArg(1, cl_buffers.pressure);
     kernel.setArg(2, cl_buffers.positions);
     opencl.queue.flush();
 
-    std::cout << "KERNEL1 " << particles.size() << "\n";
     //4 warp per 1 multiprocessor
     //opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(particles.size()), cl::NullRange,NULL, &ev_kernel);
     opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(particles.size()), cl::NullRange);
@@ -255,16 +241,12 @@ void compute_density_and_pressure_gpu() {
 void compute_forces_gpu() {
     cl::Event ev_kernel;
     cl::Kernel kernel(opencl.program, "compute_forces");
-    //cl::Kernel kernel(opencl.program, "forces");
-
     kernel.setArg(0, cl_buffers.density);
     kernel.setArg(1, cl_buffers.pressure);
     kernel.setArg(2, cl_buffers.forces);
     kernel.setArg(3, cl_buffers.velocities);
     kernel.setArg(4, cl_buffers.positions);
     opencl.queue.flush();
-
-    std::cout << "KERNEL2" << particles.size() << "\n";
 
     //4 warp per 1 multiprocessor
     //opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(particles.size()), cl::NullRange,NULL, &ev_kernel);
@@ -277,32 +259,24 @@ void compute_forces_gpu() {
 void compute_positions_gpu() {
     cl::Event ev_kernel;
     cl::Kernel kernel(opencl.program, "compute_positions");
-    //cl::Kernel kernel(opencl.program, "positions");
-
     kernel.setArg(0, cl_buffers.density);
     kernel.setArg(1, cl_buffers.forces);
     kernel.setArg(2, cl_buffers.velocities);
     kernel.setArg(3, cl_buffers.positions);
-    //kernel.setArg(4, 800);
-    //kernel.setArg(5, 600);
     opencl.queue.flush();
-
-    std::cout << "KERNEL3" << particles.size() << "\n";
 
     //4 warp per 1 multiprocessor
     //opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(particles.size()), cl::NullRange,NULL, &ev_kernel);
     opencl.queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(particles.size()), cl::NullRange);
+
     //ev_kernel.wait();
     opencl.queue.flush();
 }
 
 void on_idle_gpu() {
-    //std::clog << "GPU version is not implemented!" << std::endl; std::exit(1);
     if (particles.empty()) {
         generate_particles();
-        std::cout << "HERE1" << "\n";
         cl_buffers.init();
-        std::cout << "HERE2" << "\n";
     }
     using std::chrono::duration_cast;
     using std::chrono::seconds;
@@ -313,12 +287,7 @@ void on_idle_gpu() {
     compute_positions_gpu();
     auto t1 = clock_type::now();
     //copy the positions back on cpu
-    //cl::copy(opencl.queue, cl_buffers.positions, begin(particles_positions), end(particles_positions));
-    opencl.queue.enqueueReadBuffer(cl_buffers.positions, true, 0, 2 * particles.size()*sizeof(cl_float), particles_positions.data());
-
-    for(const auto& x: particles_positions)
-        std::cout << x << " ";
-    std::cout << "\n" << "\n";
+    cl::copy(opencl.queue, cl_buffers.positions, begin(particles_positions), end(particles_positions));
     auto dt = duration_cast<float_duration>(t1-t0).count();
     std::clog
         << std::setw(20) << dt
@@ -399,13 +368,11 @@ void openCL_init() {
 }
 
 int main(int argc, char* argv[]) {
-    //enum class Version { CPU, GPU };
-    //Version version = Version::CPU;
-    /*if (argc == 2) {
+    if (argc == 2) {
         std::string str(argv[1]);
         for (auto& ch : str) { ch = std::tolower(ch); }
         if (str == "gpu") { version = Version::GPU; }
-    }*/
+    }
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE);
 	glutInitWindowSize(window_width, window_height);
 	glutInit(&argc, argv);

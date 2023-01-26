@@ -1,17 +1,3 @@
-/*#define kernel_radius  16
-#define eps 16
-#define kernel_radius_squared (float)(kernel_radius*kernel_radius)
-#define particle_mass  65
-#define poly6  315.f/(65.f*(float)(M_PI)*pow((float)kernel_radius, 9))
-#define spiky_grad  -45.f/((float)(M_PI)*pow((float)kernel_radius, 6))
-#define visc_laplacian  45.f/((float)(M_PI)*pow((float)kernel_radius, 6))
-#define gas_const  2000.f
-#define rest_density  1000.f
-#define visc_const  250.f
-#define G (float2)(0.f, 12000*-9.8f)
-#define window_width 800.f
-#define window_height 600.f*/
-
 #define kernel_radius 16.f
 #define particle_mass 65.f
 #define gas_const 2000.f
@@ -65,12 +51,12 @@ kernel void compute_density_and_pressure(global float* density,
     float2 cur_pos = positions[glob_id];
 
     for (int i = 0; i < N; ++i) {
-            delta = cur_pos - positions[i];
-            square = (delta.x * delta.x) + (delta.y * delta.y);
-            if (square < kernel_radius_squared) {
-                sum += particle_mass * poly6 * pow(kernel_radius_squared - square, 3);
-            }
+        delta = cur_pos - positions[i];
+        square = (delta.x * delta.x) + (delta.y * delta.y);
+        if (square < kernel_radius_squared) {
+            sum += particle_mass * poly6 * pow(kernel_radius_squared - square, 3);
         }
+    }
 
     density[glob_id] = sum;
     pressure[glob_id] = gas_const * (sum - rest_density);
@@ -85,23 +71,21 @@ kernel void compute_forces(global float* density,
 
     const int glob_id = get_global_id(0);
     const int N = get_global_size(0);
-    float r;
-    float2 pressure_force = 0;
-    float2 viscosity_force = 0;
-    float2 delta;
-    float2 cur_pos = positions[glob_id];
-    float2 cur_velocity = velocities[glob_id];
 
-    float cur_pressure = pressure[glob_id], cur_density = density[glob_id];
+    float2 pressure_force = 0, viscosity_force = 0, delta;
+    float2 cur_pos = positions[glob_id], cur_velocity = velocities[glob_id];
+
+    float r, cur_pressure = pressure[glob_id], cur_density = density[glob_id];
 
     for (int i = 0; i < N; ++i)
         if (i != glob_id) {
             delta = positions[i] - cur_pos;
             r = sqrt((delta.x * delta.x) + (delta.y * delta.y));
-            //r = length(delta);
             if (r < kernel_radius) {
-                pressure_force += -unit(delta) * particle_mass * (cur_pressure + pressure[i]) / (2.f * density[i]) * spiky_grad * pow(kernel_radius - r, 2.f);
-                viscosity_force += visc_const * particle_mass * (velocities[i] - cur_velocity) / density[i] * visc_laplacian * (kernel_radius - r);
+                pressure_force += -unit(delta) * particle_mass * (cur_pressure + pressure[i]) / (2.f * density[i]) *
+                        spiky_grad * pow(kernel_radius - r, 2.f);
+                viscosity_force += visc_const * particle_mass * (velocities[i] - cur_velocity) / density[i] *
+                        visc_laplacian * (kernel_radius - r);
             }
         }
 
@@ -116,32 +100,12 @@ kernel void compute_positions(global float* density,
 
     const int glob_id = get_global_id(0);
     const float time_step = 0.0008f;
-    //const float damping = -0.5f;
 
     velocities[glob_id] += time_step * forces[glob_id] / density[glob_id];
     positions[glob_id] += time_step * velocities[glob_id];
 
     float2 cur_pos = positions[glob_id];
     float2 cur_velocity = velocities[glob_id];
-
-    // enforce boundary conditions
-
-    /*if (cur_pos.x - eps < 0.0f) {
-        cur_velocity.x *= damping;
-        cur_pos.x = eps;
-    }
-    if (cur_pos.x + eps > window_width) {
-        cur_velocity.x *= damping;
-        cur_pos.x = window_width - eps;
-    }
-    if (cur_pos.y - eps < 0.0f) {
-        cur_velocity.y *= damping;
-        cur_pos.y = eps;
-    }
-    if (cur_pos.y + eps > window_height) {
-        cur_velocity.y *= damping;
-        cur_pos.y = window_height - eps;
-    }*/
 
     lower_bounce(&cur_pos, &cur_velocity);
     upper_bounce(&cur_pos, &cur_velocity);
